@@ -1,0 +1,80 @@
+---
+title: "Analyze Amplicon Alignment Stats"
+author: "Sara Nicholson"
+date: "2023-01-03"
+output: html_document
+---
+
+## Check Read Quality
+look for adapter dimers & base-call quality with FastQC
+```{bash}
+fastqc /mnt/Active/Priya_Seq/mixed_v_infection/d12mix/Shan_mix_mixedd12_1314_1331_AGCTCACGTA_CTTTATCC_S16_R1_001.fastq.gz -o /mnt/Active/Priya_Seq/mixed_v_infection/d12mix/fastqc/
+fastqc /mnt/Active/Priya_Seq/mixed_v_infection/d12mix/Shan_mix_mixedd12_1314_1331_AGCTCACGTA_CTTTATCC_S16_R2_001.fastq.gz -o /mnt/Active/Priya_Seq/mixed_v_infection/d12mix/fastqc/
+
+fastqc /mnt/Active/Priya_Seq/mixed_v_infection/d12mix/Shan_mix_mixedd12_1314_1332_AGCTCACGTA_GACTCGTT_S17_R1_001.fastq.gz -o /mnt/Active/Priya_Seq/mixed_v_infection/d12mix/fastqc/
+fastqc /mnt/Active/Priya_Seq/mixed_v_infection/d12mix/Shan_mix_mixedd12_1314_1332_AGCTCACGTA_GACTCGTT_S17_R2_001.fastq.gz -o /mnt/Active/Priya_Seq/mixed_v_infection/d12mix/fastqc/
+
+fastqc /mnt/Active/Priya_Seq/mixed_v_infection/d12mix/Shan_mix_mixedd12_1314_1333_AGCTCACGTA_TACACGTG_S18_R1_001.fastq.gz -o /mnt/Active/Priya_Seq/mixed_v_infection/d12mix/fastqc/
+fastqc /mnt/Active/Priya_Seq/mixed_v_infection/d12mix/Shan_mix_mixedd12_1314_1333_AGCTCACGTA_TACACGTG_S18_R2_001.fastq.gz -o /mnt/Active/Priya_Seq/mixed_v_infection/d12mix/fastqc/
+
+fastqc /mnt/Active/Priya_Seq/mixed_v_infection/d12mix/Shan_mix_mixedd12_1314_1334_AGCTCACGTA_TAACGATG_S19_R1_001.fastq.gz -o /mnt/Active/Priya_Seq/mixed_v_infection/d12mix/fastqc/
+fastqc /mnt/Active/Priya_Seq/mixed_v_infection/d12mix/Shan_mix_mixedd12_1314_1334_AGCTCACGTA_TAACGATG_S19_R2_001.fastq.gz -o /mnt/Active/Priya_Seq/mixed_v_infection/d12mix/fastqc/
+
+fastqc /mnt/Active/Priya_Seq/mixed_v_infection/d12mix/Shan_mix_mixedd12_1315_1327_ACATGTAGTA_CTACGGGT_S20_R1_001.fastq.gz -o /mnt/Active/Priya_Seq/mixed_v_infection/d12mix/fastqc/
+fastqc /mnt/Active/Priya_Seq/mixed_v_infection/d12mix/Shan_mix_mixedd12_1315_1327_ACATGTAGTA_CTACGGGT_S20_R2_001.fastq.gz -o /mnt/Active/Priya_Seq/mixed_v_infection/d12mix/fastqc/
+
+```
+
+For the aligner that I am using, a 19 nucleotide “seed” must be present in order for the read to be considered “mapped”. That means that 19 matches must be in a row. If a read has SNP’s spaced 15 nucleotides apart throughout the 150 bp then it would be considered unmapped. In addition to this, Matches are given a score of 1, mismatches a score of -3 and opening gaps a score of -6 and -1 for each  nt continuing the gap. Any read that has a score of less than 30 will will not be mapped. 
+
+As we are using 250 nucloetide sequences this round, I will re-run these alignments with higher values tomorrow and see if there are any drastic changes. 
+
+#### Merge Reads if Need
+```{bash}
+./bbmerge.sh in1=/storage1/fs1/liang.shan/Active/Priya_Seq/mixed_v_infection/d12mix/Shan_mix_mixedd12_1314_1331_AGCTCACGTA_CTTTATCC_S16_R1_001.fastq.gz in2=/storage1/fs1/liang.shan/Active/Priya_Seq/mixed_v_infection/d12mix/Shan_mix_mixedd12_1314_1331_AGCTCACGTA_CTTTATCC_S16_R2_001.fastq.gz out=/storage1/fs1/liang.shan/Active/Priya_Seq/mixed_v_infection/d12mix/S16merge.fq
+```
+If merged, would align merged to amplicon reference
+
+## Align to Amplicons
+create fastq file with both amplicons as separate chromosomes
+```{bash}
+./bwa mem /mnt/Active/Priya_Seq/mixed_v_infection/amplicons.fa /mnt/Active/Priya_Seq/mixed_v_infection/d12mix/Shan_mix_mixedd12_1315_1327_ACATGTAGTA_CTACGGGT_S20_R1_001.fastq.gz /mnt/Active/Priya_Seq/mixed_v_infection/d12mix/Shan_mix_mixedd12_1315_1327_ACATGTAGTA_CTACGGGT_S20_R1_001.fastq.gz > /mnt/Active/Priya_Seq/mixed_v_infection/d12mix/d12mix_1315_1327_S20.sam
+```
+
+## Print Stats
+Use samtools to convert to bam, sort & index alignments. Then use idxstats to print alignment results. output : ref-seq - seq-length - # mapped - # unmapped
+```{bash}
+# COnvert to Bam
+samtools view -S -b x4d6_1314_1330_S102.sam > S102.bam
+# Sort
+samtools sort S102.bam -o S102.sort.bam
+# Index
+samtools index S102.sort.bam
+# IdxStats
+samtools idxstats S102.sort.bam
+```
+
+BALV3loop	      222	    90      33
+NL4-3V3loop   	228	    507746	1518
+*	              0       0	      66060
+
+# Sequence Logos
+```{bash}
+# Bam to Fasta
+samtools fasta S16.bam > S16.fa
+
+# Get all seqs with same length; 250 bp reads
+seqkit seq -m 250 /mnt/Active/Priya_Seq/mixed_v_infection/d12mix/S16sk.fa > S16_250.fa #seqkit
+seqtk seq -L 250 /mnt/Active/Priya_Seq/mixed_v_infection/d12mix/S16sk.fa > /mnt/Active/Priya_Seq/mixed_v_infection/d12mix/S16250.fa #seqtk
+
+# Create WebLogo
+cd /home/sarakn97/miniconda3/pkgs/weblogo-3.7.12-pyhd8ed1ab_0
+weblogo -f /mnt/Active/Priya_Seq/mixed_v_infection/d12mix/S16.fa -D fasta -o S16logo.png -F png -A dna
+weblogo -f /mnt/Active/Priya_Seq/mixed_v_infection/d12mix_X4_AAseq/AA_S12.fasta -D fasta -o S12_AA_logo.png -F png -A protein
+```
+
+## Output Sequence Length
+```{bash}
+cat file.fa | awk '$0 ~ ">" {if (NR > 1) {print c;} c=0;printf substr($0,2,100) "\t"; } $0 !~ ">" {c+=length($0);} END { print c; }'
+```
+
